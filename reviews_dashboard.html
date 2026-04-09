@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة قياس المراجعات - حصن الإبداع</title>
+<style>
+body { font-family: 'Arial', sans-serif; background: #f9f9f9; margin:0; padding:20px; }
+.container { max-width: 900px; margin:auto; background:#fff; padding:25px; border-radius:15px; box-shadow:0 6px 15px rgba(0,0,0,0.1); }
+h1 { font-size:28px; text-align:center; margin-bottom:15px; font-weight:bold; color:#333; }
+.update { text-align:center; color:#555; margin-bottom:20px; display:flex; justify-content:center; align-items:center; gap:5px; font-size:16px; }
+.stats { display:flex; justify-content:space-around; flex-wrap:wrap; margin-bottom:30px; }
+.stat { text-align:center; padding:20px; border-radius:15px; background:#f0f0f0; width:45%; display:flex; flex-direction:column; align-items:center; margin-bottom:15px; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+.stat-icon { font-size:50px; margin-bottom:10px; }
+.stat div { font-size:18px; font-weight:bold; }
+button { padding:12px 25px; border:none; background:#007bff; color:#fff; border-radius:10px; cursor:pointer; font-size:18px; transition:0.3s; }
+button:hover { background:#0056b3; }
+#chartContainer, #monthlyChart { height:450px; margin-bottom:35px; }
+@media print { button, .update { display:none; } }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>قياس المراجعات في تقييم العملاء لفرع حصن الإبداع</h1>
+<div class="update">📅 <span id="lastUpdated">تحميل...</span></div>
+
+<div class="stats">
+  <div class="stat" style="background:#d4edda;color:#155724;">
+    <div class="stat-icon">😊</div>
+    <div>التعليقات الإيجابية</div>
+    <div id="positiveCount">0</div>
+  </div>
+  <div class="stat" style="background:#f8d7da;color:#721c24;">
+    <div class="stat-icon">☹️</div>
+    <div>التعليقات السلبية</div>
+    <div id="negativeCount">0</div>
+  </div>
+</div>
+
+<canvas id="chartContainer"></canvas>
+<canvas id="monthlyChart"></canvas>
+
+<button onclick="loadData()">تحديث التعليقات</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const datasetURL = "https://api.apify.com/v2/datasets/IwZVtyWiC9amIh4Dh/items?format=json";
+let chart, monthlyChart;
+
+function getMonthLabel(dateStr) {
+  const date = new Date(dateStr);
+  return date.toLocaleString('ar', { month: 'long', year:'numeric' });
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(datasetURL);
+    const data = await res.json();
+
+    const positive = data.filter(d => d.stars >= 4).length;
+    const negative = data.filter(d => d.stars < 4).length;
+    document.getElementById('positiveCount').textContent = positive;
+    document.getElementById('negativeCount').textContent = negative;
+
+    document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+
+    // الرسم البياني الأساسي (عمودي محدد)
+    const chartData = {
+      labels: ['إيجابية', 'سلبية'],
+      datasets: [{
+        label: 'عدد التعليقات',
+        data: [positive, negative],
+        backgroundColor: ['#28a745','#dc3545'],
+        borderColor: ['#1e7e34','#721c24'],
+        borderWidth: 2,
+        borderRadius: 10
+      }]
+    };
+    if(chart) chart.destroy();
+    chart = new Chart(document.getElementById('chartContainer').getContext('2d'), {
+      type: 'bar',
+      data: chartData,
+      options: { responsive:true, plugins:{ legend:{ display:false }, title:{ display:true, text:'مقارنة التعليقات الإيجابية والسلبية', font:{size:22, weight:'bold'} } }, scales:{ y:{ beginAtZero:true } } }
+    });
+
+    // الرسم البياني الشهري (خط محدد)
+    const monthlyData = {};
+    data.forEach(r => {
+      const label = getMonthLabel(r.date);
+      if(!monthlyData[label]) monthlyData[label] = { positive:0, negative:0 };
+      if(r.stars >= 4) monthlyData[label].positive++;
+      else monthlyData[label].negative++;
+    });
+
+    const labels = Object.keys(monthlyData);
+    const positiveMonthly = labels.map(l => monthlyData[l].positive);
+    const negativeMonthly = labels.map(l => monthlyData[l].negative);
+
+    if(monthlyChart) monthlyChart.destroy();
+    monthlyChart = new Chart(document.getElementById('monthlyChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          { label:'إيجابية', data: positiveMonthly, borderColor:'#28a745', backgroundColor:'#28a74533', tension:0.3, fill:true, pointRadius:5, pointBorderColor:'#28a745', pointBackgroundColor:'#28a745' },
+          { label:'سلبية', data: negativeMonthly, borderColor:'#dc3545', backgroundColor:'#dc354533', tension:0.3, fill:true, pointRadius:5, pointBorderColor:'#dc3545', pointBackgroundColor:'#dc3545' }
+        ]
+      },
+      options: { responsive:true, plugins:{ title:{ display:true, text:'تطور التعليقات شهرياً', font:{size:22, weight:'bold'} } }, scales:{ y:{ beginAtZero:true } } }
+    });
+
+  } catch(err) {
+    console.error(err);
+    alert('حدث خطأ أثناء جلب البيانات!');
+  }
+}
+
+window.onload = loadData;
+</script>
+</body>
+</html>
